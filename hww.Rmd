@@ -1,0 +1,96 @@
+---
+title: "Ecu-map"
+author: "Yuyu"
+date: "2018骞<b4>11鏈<88>29鏃<a5>"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+## read in Ecu data 
+```{r}
+library(haven)
+Ecuador<-read_dta("C:/Users/18800/Desktop/stat model/ecudoar/ipumsi_00006.dta")
+head(Ecuador)
+```
+### data format 
+for year 2001 
+```{r}
+library(tidyverse)
+d0 <- Ecuador
+d0$langec2 <- as_factor(d0$langec2)
+d1 <- d0 %>%
+  mutate(geo2_ec = as.integer(geo2_ec)) %>%
+  filter(year==2001)%>%
+  group_by(geo2_ec,langec2)%>%
+  summarise(n = n())
+
+d2<-d1%>%
+  group_by(geo2_ec)%>%
+  top_n(1)
+```
+```{r}
+d3 <- d0 %>%
+  mutate(geo2_ec = as.integer(geo2_ec)) %>%
+  filter(year==2010)%>%
+  group_by(geo2_ec,langec2)%>%
+  summarise(n = n())
+
+d4<-d3%>%
+  group_by(geo2_ec)%>%
+  top_n(1)
+```
+
+### read in map data
+
+```{r}
+library(sf)
+map2<-read_sf("C:/Users/18800/Desktop/stat model/ecudoar/shapefile2/geo2_ec1962_2010.shp")
+head(map2)
+par(mar=rep(x=0,times=4))
+plot(map2)
+
+library(tidyverse)
+ggplot(data=map2)+
+  geom_sf()
+```
+
+### join the data 
+```{r}
+Ecu_data1<-map2 %>%
+  mutate(geo2_ec=as.integer(GEOLEVEL2))%>%
+  left_join(d2)
+Ecu_data1
+ Ecu_data2<-map2 %>%
+  mutate(geo2_ec=as.integer(GEOLEVEL2))%>%
+  left_join(d4)
+ Ecu_data2
+```
+
+
+```{r}
+ggplot(data=Ecu_data1,
+       mapping = aes(fill = langec2))+
+  geom_sf()+
+  labs(caption = "year2001")
+
+ggplot(data=Ecu_data2,
+       mapping = aes(fill = langec2))+
+  geom_sf()+
+  labs(caption = "year2010")
+
+```
+
+

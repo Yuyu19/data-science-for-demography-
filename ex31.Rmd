@@ -1,0 +1,180 @@
+---
+title: "Week 3 Exercise 1: IPUMS Simple Linear Regression"
+output: 
+  html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### A. Set Up
+
+1. Load the `haven`, `tidyverse` and `ipumsr` packages
+
+```{r, message=FALSE}
+library(haven)
+library(tidyverse)
+library(ipumsr)
+```
+
+2. Read in the `ipumsi_pan1960.dta` file, filter to those in Panama City (geo code for admin district 1 of 591008), save as object `d0`
+
+```{r}
+d0 <- read_dta("C:/Users/18800/Desktop/stat model/data/ipumsi_pan1960.dta") %>%
+  filter(geolev1==591008)
+
+d0
+```
+
+#### Obtaining Marital Age Difference
+
+3. Create object `d1` that 
+
+    a. contains only those with a spouse in the household
+    b. `age` is numeric
+    c. contains a new variable that uniquely identifies a married couple in a household
+    d. arranged by household number, couple id and gender
+    e. for each couple in each household summarise 
+        i) the husband excess years, 
+        ii) if the house is in an urban area (1 if yes, 0 if not)
+        iii) husbands ages
+
+```{r}
+d1 <- d0 %>%
+  filter(sploc !=0) %>%
+ mutate(age = as.numeric(age), 
+         couple_id = paste(pmin(pernum, sploc), pmax(pernum, sploc), sep = "-")) %>%
+  arrange(serial, couple_id, sex) %>%
+  group_by(serial, couple_id) %>%
+  summarise(husband_older_by = age[1] - age[2],
+            urban_house = as.numeric(urban[1]) - 1,
+            husband_age = age[1])
+d1
+```
+
+
+#### Averages with regression models
+
+4. Find the average age that the husband is older than the wife using
+    
+    a. the mean function and data `d1`
+    b. fitting a regession model with only a constant term
+
+```{r}
+mean(d1$husband_older_by)
+lm(formula = husband_older_by ~ 1, data = d1)
+```
+
+5. Find the differences in the average excess of husbands ages in urban and rural areas using a regression model
+
+```{r}
+m0 <- lm(formula = husband_older_by ~ urban_house, data = d1)
+m0
+```
+Q: What does the intercept term represent. 
+A: in rural area, the men is usually 5.5142 years older than women 
+
+Q: What does the parameter estimate for the urban represent
+A: in urban area,the marriage age difference is 0.7511 smaller than that in urban area
+
+6. Plot the scatter plot from `d1` that shows the 
+  
+    a. observations of urban status against the husband age excess with points jittered with width 0.05 so that overlapping obeservations can be viewed
+    b. the fit of a linear model between the two variables
+    
+
+```{r}
+ggplot(data = d1,
+       mapping = aes(x = urban_house, y = husband_older_by)) +
+  geom_point(position = position_jitter(width = 0.05)) +
+  geom_smooth(method='lm') 
+```
+
+#### Modelling Martial Age Differences
+
+7. Use LaTeX to write an equation of the regression model for the outcome variable $y_i$ regressed on a constant term $\beta_0$ and predictor variable $X$_i 
+
+$$
+y_i = \beta_0 + x_i + \epsilon_i
+$$
+    
+
+8. Run a regression model that 
+    - predicts the age difference based on the male age, 
+    - saves the model object as `m1`
+
+```{r}
+m1 <- lm(formula = husband_older_by ~ age[1], data = d1)
+m1
+```
+
+9. Using the results from `m1`, write an equation based on the fitted values for $\beta_0$ and $beta_1$.
+$$
+\texttt{age_difference} =  \beta_0  + \beta_1 \times {husband\_age} + \texttt{error}
+$$
+Q: Interpret the estimates of $\beta_0$ and $beta_1$.
+A: #####
+
+10. Plot the scatter plot from `d1` that shows the 
+    
+    a. observations of husband age against the husband age excess
+    b. the fit of a linear model between the two variables
+
+```{r}
+ggplot(data = d1,
+       mapping = aes(x = husband_age, y = husband_older_by)) +
+  geom_point() +
+  geom_smooth(method='lm')
+  
+```
+
+
+#### Multiple Linear Regression 
+
+
+11. Run a regression model that 
+    - predicts the age difference based on the urban status and husband age, 
+    - saves the model object as `m2` 
+```{r}
+m2 <- lm(formula = husband_older_by ~ urban_house + husband_age, data = d1)
+m2
+```
+
+Q: Write an interpretation each of the coefficients
+A: #####
+
+
+12. Use the `ggpredict()` function to predict the values based on model `m2` where both terms are in the model. Use the default plot to show the marginal effects
+```{r}
+# install.packages("ggeffects")
+library(ggeffects)
+e2 <- ggpredict(model = m2, terms = c("husband_age", "urban_house"))
+plot(e2)
+```
+
+13. Add the raw data to the plot using
+    a) default ggpredict method
+    b) your own ggplot code with a reduced alpha
+    
+```{r, eval=FALSE}
+# gives an error... need to make urban_hose a factor
+plot(e2, rawdata = TRUE)
+```
+
+```{r}
+lm(formula = husband_older_by ~ factor(urban_house) + husband_age, data = d1) %>%
+  ggpredict(terms = c("husband_age", "urban_house")) %>%
+  plot(rawdata = TRUE)
+
+
+# more flexible ggplot method
+ggplot(data = e2, mapping = aes(x = x, y = predicted, colour = group)) + 
+  geom_line() +
+  geom_ribbon(mapping = aes(ymin = conf.low, ymax = conf.high, fill = group), 
+              alpha = 0.25, linetype = 1) +
+  geom_point(data = d1, 
+             mapping = aes(x = husband_age, y = husband_older_by, colour = factor(urban_house)),
+             alpha = 0.1)
+```    
+

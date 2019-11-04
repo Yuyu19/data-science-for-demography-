@@ -1,0 +1,222 @@
+---
+title: "Week 6 Exercise 1: IPUMS International Poisson Regression 1"
+output: 
+  html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### A. Set Up
+
+1. Load the `tidyverse`, `haven`, `ipumsr`, `ggeffects`, `ggfortify` and `broom` packages
+
+```{r, message=FALSE}
+library(tidyverse)
+library(haven)
+library(ipumsr)
+library(ggeffects)
+library(ggfortify)
+library(broom)
+```
+
+2. Read in the `ipumsi_mys.dta`
+```{r}
+d0 <- read_dta("C:/Users/18800/Desktop/stat model/data/ipumsi_00013.dta")
+```
+
+3. Create the `mis_lab` object based on the exercise from last week
+```{r}
+mis_labs <- c("unknown", 
+              "niu (not in universe)",
+              # age
+              "not reported/missing", 
+              # marst and nativity
+              "unknown/missing")
+```
+
+4. Create an data frame object `d1` that 
+    a. selects the `geolev1, year, age, marst, urban, edattain, religion, nativity` columns
+    b. removes the labels that are not in the data from labelled columns (using `lbl_clean()` function in the ipumsr package)
+    c. converts values to NA when the labels are indicating the values are missing. 
+    d. converts `age` variable to numeric values based on their codes.
+    e. converts the remaining labelled variables to factors. 
+
+```{r}
+d1 <- d0 %>%
+  select(geo1_ec2010,  year, sex,chborn, age, marst,  edattain, nativity) %>%
+  mutate_if(is.labelled, lbl_clean) %>%
+  mutate_if(is.labelled, funs(lbl_na_if(., ~.lbl %in%  mis_labs))) %>%
+  mutate_at(vars(age,chborn), zap_labels) %>%
+  mutate_if(is.labelled,  as_factor)
+  
+d1
+summary(d1)
+```
+
+#### B. Data to predict number of children born in Kula Lumpar in 1970
+
+1. Create an data frame object `d2` from `d1` that 
+    a. filters to female between 15 and 45 in Kula Lumpa (geoleve1 code of 458010) in 1970
+    b. create a `age10` variable for the age in units of decades
+    c. drop the `geolev1`, `year`, `sex` and `age` columns
+    d. drop rows with `NA` observations in one of the observations
+
+```{r}
+d2 <- d1 %>%
+  filter(geo1_ec2010 == "pichincha", 
+          sex == "female", 
+          age >= 15, age <= 45) %>%
+  mutate( age10 = age/10) %>%
+  select(-(geo1_ec2010:sex), -age) %>%
+   na.omit()
+d2
+```
+
+2. Take a look at the summary statistics of each variable
+
+```{r}
+summary( d2)
+```
+
+3. Plot a bar chart for the future outcome variable `chborn`
+
+```{r}
+ggplot(data = d2, 
+       mapping = aes(x = chborn)) +
+  geom_bar()
+
+```
+
+4. Q: From the plot and summary above find the mean and median number of children born 
+
+A: Mean   : 1.443  Median : 1.000
+
+#### C. Models to predict number of children born in Kula Lumpar in 1970
+
+1. Fit a regression model to the data from 1970, with `chborn` as the outcome variable and `age10` as predictor variables. Store the results in an object `m0` and use the display function to show a summary of the model (without loading the arm package)
+
+```{r}
+m0 <- glm(formula = chborn ~ age10, data = d2, family = "poisson")
+arm::display(m0)
+```
+
+2. Use the `update()` function to add the following terms to the model:
+  
+    a. `marst`
+    b. `edattain`
+    
+    e. `nativity`
+
+    
+  Save new models from each update as separate objects. 
+  Use the `display()` function to show the final model (`m6`).
+
+```{r}
+m1 <- update(object = m0, . ~ . + marst)
+
+m2 <- update(object = m1, . ~ . + edattain)
+
+
+m3 <- update(object = m2, . ~ . + nativity)
+
+m4 <- update(object = m3, . ~ . + nativity*edattain)
+m5 <- update(object = m3, . ~ . + nativity*marst)
+m6 <- update(object = m3, . ~ . + nativity*age10)
+arm::display(m6)
+
+```
+3. Use summary to show the t-tests for each parameters (of the null hypothesis that their value is zero) for the final model `m6`
+
+```{r}
+summary(m6)
+```
+4. Simple t-tests are not very useful for building models when we have categorical data. Use the `anova()` function to compare the deviance statistics from model `m0` and `m1`.
+
+```{r}
+anova(m0, m1)
+```
+
+5. Set the test argument to `Chisq` in the `anova()` function to test for the inclusion of the `marst` categorical variable
+
+```{r}
+anova(m0, m1, test = "Chisq")
+```
+
+6. Carry out a series of `Chisq` tests in the `anova()` function to test for the expansion of our series of nested models.
+
+```{r}
+anova(m0, m1, m2, m3, m4,m5,m6, test = "Chisq")
+```
+7. Q: Do these test suggest dropping any terms?
+
+A: Evidence to suggest the additional deviance reduction from the `nativity:urban` interaction is close to zero, so could drop this term.  model6
+
+8. Use the `glance()` function to find the AIC and BIC model statistics from model `m0` and model `m5`
+
+```{r}
+glance(m0)
+glance(m6)
+```
+
+9. Create a tibble that contains 
+    a. a column of lists containing all the models
+    b. a column of numbers of the model names
+    c. a data frame with the results of the glance function applied to each model
+
+```{r}
+m <- list(m0 = m0,
+          m1 = m1,
+          m2 = m2,
+          m3 = m3,
+          m4 = m4,
+          m5 = m5,
+          m6 = m6
+       ) %>%
+  tibble(model = .) %>%
+  mutate(model_name = 0:6,
+         stats = map(model, glance))
+m
+```
+
+10. Using `m` display the AIC and BIC from each model by 
+    a. Removing the model column
+    b. Use the `unnest()` function to give the contents of the glance function as data values
+    c. Select the `model_name`, `AIC` and `BIC` columns
+
+```{r}
+ m %>%
+  select(-model) %>%
+  unnest() %>%
+  select(model_name, AIC, BIC)
+
+```
+
+11. Q: Which model has the lowest AIC and BIC? What does this mean?
+
+A: model 3. The BIC penalizes the model more for having extra parameters. 
+
+
+#### D. Model Assesment
+
+1. Use the `autoplot()` function in ggfortify to check the residuals of `m4`
+
+```{r}
+autoplot(m3)
+```
+
+2. Using `ggpredict()` show the change over `age10` in the predicted number of children by education and marital status from model `m4`
+
+```{r}
+ggpredict(model = m3, terms = c("age10", "edattain", "marst")) %>%
+  plot()
+```
+
+3. Using `ggpredict()` show the change over `age10` in the predicted number of children by education and urban location from model `m4`
+
+```{r}
+ggpredict(model = m4, terms = c("age10", "edattain", "nativity")) %>%
+  plot()
+```
+

@@ -1,0 +1,198 @@
+---
+title: "Week 2 Exercise 1: IPUMS Distributions"
+output: 
+  html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### A. Set Up
+
+1. Load the `haven`, `tidyverse` and `ipumsr` packages
+
+```{r, message=FALSE}
+library(haven)
+library(tidyverse)
+library(ipumsr)
+```
+
+2. Read in the `ipumsi_pan1960.dta` file, save as object `d0`
+
+```{r}
+d0 <- read_dta("C:/Users/18800/Desktop/stat model/data/ipumsi_pan1960.dta")
+d0
+```
+
+#### Confidence Intervals
+
+3. Examine labels for the `chborn` variable
+
+```{r}
+table(d0$chborn)
+```
+
+4. Create an object `d1` that exlcudes all males and females with unknown (98) or not in universe (99) for `chborn`
+ 
+```{r}
+d1 <- d0 %>%
+  filter(chborn != 98, 
+         chborn != 99)  
+
+```
+
+5. Find the 95% confidence interval for the mean of `chborn` in Panama using the `t.test()` function
+
+```{r}
+t95 <- t.test(x = d1$chborn)
+t95
+t95$conf.int
+```
+
+6. Find the 80% confidence interval for the mean of `chborn` in Panama using the `t.test()` function
+
+```{r}
+t80 <- t.test(x = d1$chborn, conf.level = 0.8)
+t80$conf.int
+```
+
+
+#### Proportions
+
+7. Inspect the `edattain` codes
+
+```{r}
+str(d0$edattain)
+table(d0$edattain)
+unique(d0$edattain)
+```
+
+8. Create and object `tab0` that 
+
+a. converts those with unknown (9) sex to `NA`
+b. converts those not in universe (code 0) or unknown (9) to `NA`
+c. converts sex and edattain to factors
+d. creates a cross tabulation by sex and edattain
+
+```{r}
+tab0 <- d0 %>%
+  mutate(sex = lbl_na_if(sex, ~.val == 9),
+         edattain = lbl_na_if(edattain, ~.val %in% c(0,9)),
+         sex = as_factor(sex),
+         edattain = as_factor(edattain)) %>%
+  select(sex, edattain) %>%
+  table()
+tab0
+```
+
+9. Display `tab0` with the margin totals
+
+```{r}
+addmargins(tab0)
+```
+
+10. Display the cross tabulation as a proportion table rounded to 3 decimal places
+```{r}
+tab0 %>% 
+  prop.table() %>%
+  round(digits = 3)
+```
+
+11. Use the `margin` argument in `prop.table()` to give the proportion by gender in each eduaction category rounded to 3 decimal places
+```{r}
+tab0 %>% 
+  prop.table(margin = 2) %>%
+  round(digits = 3)
+```
+
+12. Find a confidence interval for proportion of females with completed university education
+```{r}
+p0 <- prop.test(x = 100, n = 319)
+p0
+```
+
+### Plotting Confidence Intervals
+
+13. Create an object `d2` that exlcudes 
+a. includes only the first person in the household (`pernum == 1`), 
+b. excludes those with the number of rooms unknown (98) or not in universe (99)
+c. excludes those with the martial status unknown (0) or not in universe (9)
+d. converts `marst` to a factor
+```{r}
+d2 <- d0 %>% 
+  filter(pernum == 1,
+         marst != 0, 
+         marst != 9, 
+         rooms != 98,
+         rooms != 99) %>%
+  mutate(marst = as.factor(marst))
+```
+
+14. Modify `d2` so that is summarises for each martial status
+a. the number of households,
+b. the mean number of rooms
+c. the standard error of the number of rooms
+d. the upper and lower 95% bounds for a t-test for the number of rooms - calculate directly using `qt` (see page 18 in Gelman and Hill)
+
+```{r}
+d2 <- d2 %>%
+  group_by(marst) %>%
+  summarise(n = n(),
+            mu = mean(rooms),
+            se = sd(rooms)/sqrt(n),
+            lwr = mu + qt(p = 0.025, df = n-1) * se,
+            upp = mu + qt(p = 0.975, df = n-1) * se)
+d2
+```
+
+15. Plot the confidence intervals for each martial status
+```{r}
+ggplot(data = d2, 
+       mapping = aes(x = marst, y =mu)) +
+  geom_point() +
+  geom_pointrange(mapping = aes(ymin = lwr, ymax = upp))
+```
+
+16. Q: What can we say about the confidence intervals?
+
+A: #####
+
+17. Create an object `d3` based on `d0`
+a. that excludes those with the eduacation unknown (0) or not in universe (9)
+b. converts `edattain` to a factor
+c. summarises by education category the
+    i. number of males
+    ii. number of females
+    iii. number of people
+    iv. the proportion of females in each group
+    v. the standard error for the proportion
+    vi. the upper and lower 95% confidence intervals for the proportion - calcuated directly using `qnorm()` (see page 18 in Gelman and Hill)
+```{r}
+d3 <- d0 %>% 
+ filter(edattain != 0,
+         edattain != 9) %>%
+  mutate(edattain = as.factor(edattain)) %>%
+  group_by(edattain) %>%
+  summarise(male = sum(sex == 1),
+            female = sum(sex == 2),
+            n = male + female,
+            p = female/n ,
+            se = sqrt(p* (1-p) / n),  ###v
+            lwr = p + qnorm(p = 0.025) * se,
+            upp = p + qnorm(p = 0.975) * se)
+```
+
+18. Plot the confidence intervals for each proportion in `d3`. Include a horizontal line at 0.5.
+```{r}
+ggplot(data = d3, 
+       mapping = aes(x = edattain, y = p)) +
+  geom_point() +
+  geom_pointrange(mapping = aes(ymin = lwr, ymax = upp)) +
+  geom_line(yintercept = 0.5)
+```
+
+19. Q: What can we say about the confidence intervals?
+
+
+A: ##### 

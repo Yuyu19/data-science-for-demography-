@@ -1,0 +1,124 @@
+---
+title: "Ecudaor--how will the edcuation level influence women's childbirth?"
+author: "Yuyu"
+date: "2018骞<b4>12鏈<88>11鏃<a5>"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##  set UP
+```{r, message=FALSE}
+library(haven)
+library(tidyverse)
+library(ipumsr)
+```
+
+## READ IN DATA 
+SAVE AS ECU
+```{r }
+ecu <- read_dta("C:/Users/18800/Desktop/stat model/data/ipumsi_00007.dta")
+ecu
+```
+
+##examnine variables
+```{r}
+table(ecu$lit)
+str(ecu$lit)
+hist(ecu$chborn)
+```
+
+###filter data
+```{r}
+ecu1<-ecu%>%
+  filter(lit!=0,
+         lit!=9,
+        chborn!=99,chborn!=98 )
+```
+
+
+###cross-table
+```{r}
+tab0 <- ecu %>%
+  filter(sex==2)%>% ###filter out man 
+  mutate(chborn = lbl_na_if(chborn, ~.val %in% c(98,99)), 
+         chborn_group=case_when(chborn<6 ~"00-05",
+                              chborn>=6 & chborn<12 ~"06-11",
+                              chborn>=12& chborn <=19 ~ "12-19"),
+         lit = lbl_na_if(lit, ~.val %in% c(0,9)),
+         lit = as_factor(lit)) %>%
+  select(lit, chborn_group) %>%
+  table()
+
+addmargins(tab0)
+```
+
+##propotational cross table
+```{r}
+tab1 <- ecu %>%
+  filter(sex==2)%>% ###filter out man 
+  mutate(chborn = lbl_na_if(chborn, ~.val %in% c(98,99)), 
+         chborn_group=case_when(chborn<6 ~"00-05",
+                              chborn>=6 & chborn<12 ~"06-11",
+                              chborn>=12& chborn <=19 ~ "12-19"),
+         lit = lbl_na_if(lit, ~.val %in% c(0,9)),
+         lit = as_factor(lit)) %>%
+  select(lit, chborn) %>%
+  table()
+
+
+tab1 %>% 
+  prop.table() %>%
+  prop.table(margin = 2) %>%
+  round(digits = 3)
+tab0 %>% 
+  prop.table() %>%
+  prop.table(margin = 2) %>%
+  round(digits = 3)
+```
+###propotational test 
+### H0:literate women give birth to the same number of children as illiterate women
+### H1:literate women give birth to less children compared with illiterate women 
+```{r}
+p0 <- prop.test(x = 129283, n = 133944)##literate with a child 
+p1<-prop.test(x=29,n=49)##literate with 19 child 
+p0
+p1
+```
+```{r}
+ecu2<- ecu %>%
+  filter(sex==2,
+         lit!=0,
+         lit!=9,
+        chborn!=99,chborn!=98 )%>%
+  mutate(lit=as_factor(lit))
+         
+d2 <- ecu2 %>%
+  group_by(lit)%>%
+  summarise(n = n(),
+            mu = mean(chborn),
+            se = sd(chborn)/sqrt(n),
+            lwr = mu + qt(p = 0.025, df = n-1) * se,
+            upp = mu + qt(p = 0.975, df = n-1) * se)
+d2
+```
+### plot the confidence interval 
+```{r}
+ggplot(data = d2, 
+       mapping = aes(x = lit, y =mu)) +
+  geom_point() +
+  geom_pointrange(mapping = aes(ymin = lwr, ymax = upp))
+
+```
+## conclusion 
+##1.the confidece interval of illiterate women is [5.175054,5.227425] at a 99.95% confidence level. Which means that we have 99.95% confidence to say that the mean of childbirth of illiterate women is between [5.175054,5.227425].
+##2. the confidece interval of literate women is [2.168194,2.178591] at a 99.95% confidence level. Which means that we have 99.95% confidence to say that the mean of childbirth of literate women is between [2.168194,2.178591].
+##3. In conclusion, we have 99.95% confidence to reject the null hypothesis. So we can tell that the mean of childbirth of illiterate women is higher than that of literate women. In this way, we can say that literate women give birth to less children compared with illiterate women 
+  
+  
+
+  

@@ -1,0 +1,299 @@
+---
+title: "Week 7 Exercise 1: IPUMS International Multilevel/Hierarchical Regression 1"
+output: 
+  html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### A. Set Up
+
+1. Load the `tidyverse`, `haven`, `ipumsr`, `ggeffects`, `ggfortify` and `broom` packages
+
+```{r, message=FALSE}
+library(tidyverse)
+library(haven)
+library(ipumsr)
+library(ggeffects)
+library(ggfortify)
+library(broom)
+```
+
+2. Read in the `ipumsi_mys.dta`
+```{r}
+d0 <- read_dta("C:/Users/18800/Desktop/stat model/data/ipumsi_mys.dta")
+```
+
+3. Create the `mis_lab` object based on the exercise from last week
+```{r}
+mis_labs <- c("unknown", 
+              "niu (not in universe)",
+              # age
+              "not reported/missing", 
+              # marst and nativity
+              "unknown/missing")
+```
+
+4. Create an data frame object `d1` that 
+    a. removes the detailed variables `marstd, religiond, edattaind, empstatd` columns
+    b. removes the labels that are not in the data from labelled columns (using `lbl_clean()` function in the ipumsr package)
+    c. converts values to NA when the labels are indicating the values are missing. 
+    d. converts `age` and `age_sp` variable to numeric values based on their codes.
+    e. converts the remaining labelled variables to factors. 
+
+```{r}
+d1 <- d0 %>%
+  select(-ends_with("d")) %>%
+  mutate_if(is.labelled, lbl_clean) %>%
+  mutate_if(is.labelled, funs(lbl_na_if(., ~.lbl %in% mis_labs))) %>%
+  mutate_at(vars(age, age_sp), zap_labels) %>%
+  mutate_if(is.labelled, as_factor)
+d1
+```
+
+5. Use the `sf` package to load the shape file `geo2_my1970_2000.shp`. 
+
+```{r}
+library(sf)
+s0 <- read_sf("C:/Users/18800/Desktop/stat model/data/geo2_my1970_2000/geo2_my1970_2000.shp")
+s0
+```
+
+6. Create data frame `s1` that has
+    a. a new column `geolev2` that is a numeric version of the `GEOLEVEL2` column. 
+    b. a new column `region` that is a factor based on `ADMIN_NAME`
+    c. has no `geometry` column, hint: use `st_set_geometry(NULL)`
+    d. has on the `geolev2` and `region` variable remaining
+
+```{r}
+s1 <- s0 %>%
+mutate(geolev2 = as.numeric(GEOLEVEL2), 
+         region = fct_inorder(ADMIN_NAME)) %>%
+  st_set_geometry(NULL) %>%
+  select(geolev2, region)
+s1
+```
+
+
+
+#### B. Data to predict age of husbands ages, for females in their 20s living with children in 2000
+
+1. Create a data set to model `d2` from `d1` that 
+    a. filters to year 2000, for females in their 20s, that are married, and living in a household (`hhtype`) that is `married/cohab couple with children`
+    b. has a new column `region` taken from joining `s2`
+    c. has new column `husband_age` for the husbands age (hint: husbands age is in column `age_sp`)
+    d. has a new column `age_sp` to transform the wife age to the number of years above 20. This will make interpretation of model intercepts easier.
+    e. the number of children in the household (hint: number of people in the household is in the column `persons`)
+    f. selects the husband_age, wife_age20, children, religion, urban, nativity, edattain and region columns
+    g. drops any rows with `NA` and any levels not used in the categorical variables.
+
+```{r}
+d2 <- d1 %>%
+  filter(year == 2000,
+         sex == "female",
+         age >= 20, age < 30,
+         marst== "married/in union",
+         hhtype == "married/cohab couple with children") %>%
+  left_join(s1) %>%
+  mutate(husband_age = age_sp,
+         wife_age20 = age - 20,
+         children = persons - 2) %>%
+  select(husband_age, wife_age20,children, religion, urban, nativity, edattain, region) %>%
+  na.omit() %>%
+  droplevels()
+d2
+head(d1)
+```
+
+2. Take a look at the summary statistics of each variable
+
+```{r}
+summary(d2)
+```
+
+3. Plot a  density chart for our outcome variable `husband_age` minus the `wifes_age`, include a vertical line at zero, to 
+
+```{r}
+ggplot(data = d2, 
+       mapping = aes(x = husband_age - (wife_age20 + 20))) +
+  geom_density() +
+  geom_vline(xintercept = 0)
+```
+
+5. Q: From the plot and summary above find the mean and maximum husband age
+
+A: Mean is 12, Maximum is 78
+
+6. Plot a density chart for our outcome variable `husband_age` in each region
+
+```{r}
+ggplot(data = d2, 
+       mapping = aes(x = husband_age - (wife_age20 + 20), group = region)) +
+  geom_density() +
+  geom_vline(xintercept = 0)
+
+```
+
+
+
+#### C. Standard linear regression models to predict age of husbands ages, for females in their 20s living with children in 2000
+
+1. Fit a regression model to the data from 2000, with `husband_age` as the outcome variable and `wife_age20` and `children` as predictor variables. Store the results in an object `m`` and use the display function to show a summary of the model (without loading the arm package)
+
+```{r}
+m1 <- lm(husband_age ~ wife_age20 + children, data = d2)
+summary(m1)
+```
+
+2. Use the `update()` function to add the following terms to the model:
+  
+    a. `region`
+    b. `edattain`, `nativity`, `urban`
+    
+Save new models from each update as separate objects. 
+Use the `display()` function to show the final model (`m3`).
+    
+```{r}
+m2 <- update(object = m1, . ~ . + region)
+
+m3 <- update(object = m2, . ~ . + edattain + nativity + edattain)
+arm::display(m3)
+```
+
+#### D. Model Assesment
+
+1. Use the `autoplot()` function in ggfortify to check the residuals of `m4`
+
+```{r}
+autoplot(m3)
+```
+
+2. Use the numbers in the model assessment plots to find individuals that are outliers. What do they have in common?
+
+```{r}
+d2 %>%
+  slice(c(6081, 6677, 5711))
+```
+
+A: They husband are very old (over 60)
+
+3. Use the ggpredict to plot the predicted relationship between the outcome variable and wife age for families with 2 children
+
+```{r}
+ggpredict(model = m3, terms = c("wife_age20", "children[2]")) %>%
+  plot()
+```
+
+4. Use the ggpredict to plot the predicted relationship between the outcome variable and wife age for families with 2 children for all regions.
+
+```{r}
+ggpredict(model = m3, terms = c("wife_age20", "children[2]","region")) %>%
+  plot()
+```
+
+5. Use the ggpredict to plot the predicted relationship between the outcome variable and wife age for families with 2 children for the Larut Dan Matang, Rembau, Port Dickson regions
+
+```{r}
+ggpredict(model = m3, 
+          terms = c("wife_age20", 
+                    "edattain[less than primary completed, university completed]", 
+                    "region[Larut Dan Matang, Rembau, Port Dickson]")
+          ) %>%
+  plot() 
+```
+
+#### D. Multilevel/Hierarchical regression models to predict age of husbands ages, for females in their 20s living with children in 2000
+
+1. Using the `lme4` package, fit the same regression model as `m2`, except with region as a varying intercept term. Save the results in object `m4` and show parameter estimates using the `display` function
+
+```{r}
+library(lme4)
+m4 <- lmer(husband_age ~ wife_age20 + children + (1 | region), data = d2)
+arm::display(m4)
+```
+
+2. Provide a brief summary for each of the sets of the parameters in the plot above
+
+*Intercept* 25.70 
+
+*wife_age20* 0.58 
+
+*children*  1.04 
+
+2. Show just the fixed effects (non-varying) terms using the `fixef` term.
+
+```{r}
+fixef(m4)
+```
+
+3. Show just the random effects (varying) terms using the `ranef` term
+
+```{r}
+ranef(m4)
+```
+
+4. Create a group level predictor variable for the sex ration in each region by 
+    a. Joining `s1` to `d1``
+    b. grouping by region
+    c. filtering to year 2000
+    d. creating a summary count for 
+        i. the number of males between 20 and 39
+        ii. the number of females between 20 and 39
+        iii. the sex ratio based on 100 * men/women
+    
+```{r}
+d3 <- d1 %>%
+  left_join(s1) %>%
+  group_by(region) %>%
+  filter(year == 2000) %>%
+  summarise(
+    men = sum(sex %in% "male" & age >= 20 & age < 40),
+    women = sum(sex %in% "female" & age >= 20 & age < 40),
+    region_sex_ratio = 100 * men/women
+  )
+d3
+```
+  
+5. Join the group level predictors to `d2`, store in a new data frame `d4`
+
+```{r}
+d4 <- left_join(d2, d3)
+d4
+```
+
+
+6. Update model `m4` to include the predictor `region_sex_ratio`
+
+```{r}
+m5 <- update(object = m4, . ~ . + region_sex_ratio, data = d4)
+arm::display(m5)
+```
+
+7. Q: Provide some interpretation for the `region_sex_ratio` parameter
+
+A: #####
+
+### E. Model Comparisons
+
+1. Build a tibble to compare the five models by 
+    a. creating a list contain the five models
+    b. converting the list to a tibble with a column `model` containing all the models
+    c. add a column for the `model_name`
+    d. add a data frame with the results of the `glance` function applied to each model
+    e. drop the `model` column
+    f. unnest the tibble to show
+
+```{r}
+list(m1, m2, m3, m4, m5) %>%
+  tibble(model = .) %>%
+  mutate(model_name = 1:n(),
+         stats = map(model, glance)) %>%
+  select(-model) %>%
+  unnest()
+```
+
+2. Compare the AIC and BIC of the models. Which are the best models according to these criteria?
+
+#####

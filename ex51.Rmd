@@ -1,0 +1,310 @@
+---
+title: "Week 5 Exercise 1: IPUMS International Logistic Regression 1"
+output: 
+  html_document
+---
+
+#### A. Set Up
+
+1. Load the `haven`, `tidyverse`, `ggeffects` and `ipumsr` packages
+
+```{r, message=FALSE}
+library(tidyverse)
+library(haven)
+library(ggeffects)
+library(ipumsr)
+```
+
+2. Read in the `ipumsi_mys.dta`
+```{r}
+d0 <- read_dta("E:/ADRI/teaching/SHU-SM4D2018/exercise-data/ipumsi_mys.dta")
+```
+
+3. Create the `mis_lab` object based on the exercise from last week
+```{r}
+mis_labs <- c("unknown", 
+              "niu (not in universe)",
+              # age
+              "not reported/missing", 
+              # marst and nativity
+              "unknown/missing")
+```
+
+4. Create an data frame object `d1` that 
+    a. selects the ` columns
+    b. removes the labels that are not in the data from labelled columns (using `lbl_clean()` function in the ipumsr package)
+    c. converts values to NA when the labels are indicating the values are missing. 
+    d. converts `age` variable to numeric values based on their codes.
+    e. converts the remaining labelled variables to factors. 
+
+```{r}
+d1 <- d0 %>%
+  select(year, edattain, age, sex, urban, nativity) %>%
+  mutate_if(is.labelled, lbl_clean) %>%
+  mutate_if(is.labelled, funs(lbl_na_if(., ~.lbl %in% mis_labs))) %>%
+  mutate_at(vars(age), zap_labels) %>%
+  mutate_if(is.labelled, as_factor)
+d1
+```
+
+#### B. Data to predict the probability of females having at least secondary education
+
+1. Create three extra variables in `d1` for
+    a. a `high_edu` variable to indicate if the individual has a high level of education (secondary completed, university completed)
+    b. a `c_age` variable for a centered age variable based on the mean age in each year
+    c. a `z_age` variable for a Z-score standardized age variable based on the mean and standard deviation of age in each year
+
+
+```{r}
+d1 <- d1 %>%
+  mutate(high_edu = ifelse(test = edattain %in% c("secondary completed", "university completed"),
+                           yes = 1, no = 0)) %>%
+  group_by(year) %>%
+  mutate(c_age = age - mean(age, na.rm = TRUE),
+         z_age = (age - mean(age, na.rm = TRUE))/sd(age, na.rm = TRUE)) %>%
+  ungroup() 
+```
+
+3. Create a filtered data frame `d2` for female adults (age >= 18) 
+
+```{r}
+d2 <- d1 %>%
+  filter(age >= 18, 
+         sex == "female")
+```
+
+
+4. View the first few rows of `d2` for the data from the 2000 census
+
+```{r}
+d2 %>% 
+  filter(year == 2000)
+```
+
+5. Provide summary of each variable in the data for adult females from the 2000 census
+
+```{r}
+d2 %>% 
+  filter(year == 2000) %>%
+  select(-year, -sex) %>%
+  summary()
+```
+
+6. Q: From the summary above find the percentage of females have higher education? 
+
+A: 12.8%
+
+#### C. Logistic regression for the probability of females having at least secondary education
+
+1. Fit a regression model to the data from 2000, with `high_edu` as the outcome variable and a interaction of `urban` and `nativity` as predictor variables. Store the results in an object `m0`
+
+```{r}
+m0 <- glm(formula = high_edu ~ urban * nativity, 
+          data = filter(d2, year == 2000), 
+          family = "binomial")
+```
+
+2. Without loading the arm package, use the display function to show a summary of the model (if we load the arm package, it will cause problems with the `select()` function later on)
+
+```{r}
+install.packages("arm")
+arm::display(m0)
+```
+
+3. Create a data frame `d3` that summarizes for each year, urban and nativity status the 
+    a. number of observations,
+    b. number of individuals with high education
+    c. number of individuals without high education
+    d. proportion of individuals with high education
+
+```{r}
+d3 <- d2 %>%
+  group_by(year, urban, nativity) %>%
+  summarise(n = n(), 
+            n_high_edu = sum(high_edu),
+            n_not_high_edu = n - n_high_edu,
+            p_high_edu = n_high_edu/n)
+```
+
+4. Fit regression models to the data from 2000 in `d3` with the interaction of `urban` and `nativity` as predictor variables and
+    - two columns based on the number with and without `high_edu` as the outcome variables 
+    - the proportion of people with `high_edu` as the outcome variables and weights based on the number of observations. 
+
+```{r}
+m1 <- glm(formula = cbind(n_high_edu, n_not_high_edu) ~ urban * nativity,  
+          data = filter(d3, year == 2000),
+          family = "binomial")
+m2 <- glm(formula = p_high_edu ~ urban * nativity,  
+          data = filter(d3, year == 2000),
+          family = "binomial",
+          weights = n)
+```
+
+5. Without loading the arm package, use the display function to show a summary of the two models. Compare the coefficients and standard errors with `m0` above
+
+```{r}
+arm::display(m1)
+arm::display(m2)
+
+```
+
+
+#### D. Parameter interpretation
+
+1. Fit a regression model to the `d2` data from 2000, with `high_edu` as the outcome variable and a `age` and an interaction of `urban` and `nativity` as predictor variables. Store the results in an object `m3`
+
+```{r}
+m3 <- glm(formula = high_edu ~ age + urban * nativity,
+          data = filter(d2, year == 2000),
+          family = "binomial")
+arm::display(m3)
+```
+
+2. Use the `invlogit()` function in the arm package to interpret the intercept coefficient in `m3`
+
+```{r}
+arm::invlogit(m3$coefficients[1])
+```
+The estimated probability of a native-born female living in rural area in 2000 having a high level of education when their age is zero is 0.46. This is impossible.
+
+
+3. Fit a regression model to the `d2` data from 2000, with `high_edu` as the outcome variable and a `c_age` and an interaction of `urban` and `nativity` as predictor variables. Store the results in an object `m4`
+
+```{r}
+m4 <- glm(formula = high_edu ~ c_age + urban * nativity,
+          data = filter(d2, year == 2000),
+          family = "binomial")
+arm::display(m4)
+```
+
+4. Interpret all the coefficients in `m4`
+
+- *Intercept:* The estimated probability of a native-born female living in rural area of an average age (`r mean(d2$age, na.rm = TRUE)`) in 2000 having a high level of education is `r arm::invlogit(m4$coefficients[1])`.
+
+- *Urban:* The increase (on the logit scale) in the probability of a urban female who is native born having a high level of education at the average age (`r mean(d2$age, na.rm = TRUE)`) compared to a rural, native born, female. To quickly interpret this on the probability scale, we divide by 4: `r m4$coefficients[3]/4`. Thus, for a native born female at average age, living in an urban area corresponds to an approximate 24% increase in probability of having a high level of education.
+
+- *Natvity*: The increase (on the logit scale) in the probability of a foreign born female in a rural location having a high level of education at the average age (`r mean(d2$age, na.rm = TRUE)`) compared to native born female in a rural location. To quickly interpret this on the probability scale, we divide by 4: `r m4$coefficients[4]/4`. Thus, for a female at average age in a rural area, when they are foreign born corresponds to an approximate 29% decrease in probability of having a high level of education.
+
+- *Interaction* the increase (on the logit scale) in the probability of an foreign born female living in a urban location having a high level of education at the average age (`r mean(d2$age, na.rm = TRUE)`) compared to a native-born female in a rural location. To quickly interpret this on the probability scale, we divide by 4: `r m4$coefficients[5]/4`. Thus, for a female at average age in a urban area, when they are foreign born corresponds to an approximate 3.4% increase in probability of having a high level of education.
+
+
+#### E. Residuals
+
+1. Use the `autoplot()` function in ggfortify to check the residuals of `m4`
+
+```{r}
+library(ggfortify)
+autoplot(m4)
+```
+
+2. Q: Why do these look so strange?
+
+A: The residuals are discrete (0 or 1s) because the outcome variable is discrete (the residuals are the outcome variable minus the predicted outcome)
+
+3. Use the `binnedplot()` function to plot the residuals from `m4` where
+    a. the x argument is set to predictions of the response from `m4` (hint: use the `predict()` function)
+    b. the y argument is set to residuals of the response from `m4` (hint: use the `resid()` function)
+```{r}
+arm::binnedplot(x = predict(m4, type = "response"), 
+                y = resid(m4, type = "response"))
+```    
+    
+4. Alter the code for the binned plots to create two plots where
+    a. both change the default number of points per bins to 100
+    b. the second plot uses age on the x-axis instead of the predicted outcome.
+
+```{r}
+arm::binnedplot(x = predict(m4, type = "response"), 
+                y = resid(m4, type = "response"), 
+                nclass = 100)
+arm::binnedplot(x = m4$data$age, 
+                y = resid(m4, type = "response"), 
+                nclass = 100)
+```
+
+#### F. Predictions
+
+1. Using `ggpredict()` show the change over age in the predicted probability of females having high school education based on the model `m3`
+
+```{r}
+m3 %>%
+  ggpredict(terms = c("age", "nativity", "urban")) %>%
+  plot()
+
+```
+
+2. Adapt the plot above to show the predicted probabilities from ages 20 to 60 only
+
+```{r}
+m3 %>%
+  ggpredict(terms = c("age[20, 25, 30, 35, 40, 45, 50, 55, 60]", "nativity",  "urban")) %>%
+  plot()
+```
+
+3. Using `ggpredict()` show the change over age in the predicted probability of females having high school education based on the model `m4`. Between this plot and the plot above, which is easier to interpret?
+
+```{r}
+m4 %>%
+  ggpredict(terms = c("c_age", "nativity",  "urban")) %>%
+  plot()
+```
+
+#### G. Models in serperate time periods
+
+1. Fit the same model as `m4` to each year in the data set `d2`. Store tidied coefficients in a data frame object called `m5`
+
+```{r}
+m5 <- d2 %>%
+  group_by(year) %>%
+  do(m = glm(formula = high_edu ~ c_age + urban * nativity, data = ., family = "binomial")) %>%
+  broom::tidy(m) %>%
+  mutate(term = fct_inorder(term))
+```
+
+2. Plot the model coefficients and their 80% confidence intervals
+
+```{r}
+ggplot(data = m5,
+       mapping = aes(x = year, y = estimate,
+                     ymin = estimate + qnorm(0.1) * std.error,
+                     ymax = estimate + qnorm(0.9) * std.error)) +
+  facet_wrap("term", scales = "free") +
+  geom_point() +
+  geom_pointrange() +
+  geom_hline(yintercept = 0)
+
+```
+3. Describe the changes over time in the coefficients.
+
+- *Intercept:* Increase (on the logit scale) over time of the probability of native born, rural living females having high levels of education
+- *Age:* After 1980 an increase (on the logit scale) of the probability of native born, rural living females of average age having high levels of education
+- *Urban:* No change after 1970 in the extra increase (on the logit scale) of the probability of native born females of average age having high levels of education by living in urban areas.
+- *Nativity:* Falls in the extra increase (on the logit scale) of the probability of rural females of average age having high levels of education from being foreign born.
+- *Interaction:* Increase then fall in the extra increase (on the logit scale) of the probability of females of average age having high levels of education from being foreign born and living in urban areas.
+
+
+4. Fit the same model as `m3` to each year in the data set `d2`. Store the results in an object `m6`.
+
+```{r}
+# check the formala in m3
+formula(m3)
+
+# we can use formula() to save writing out the formula again...
+m6 <- d2 %>%
+  group_by(year) %>%
+  do(m = glm(formula = formula(m3), data = ., family = "binomial"))
+```
+
+5. Plot the prediction for each model for ages between 20 and 65. Fix the limits of the y-axis between 0 and 0.4
+
+```{r}
+for(i in 1:4){
+  m6$m[[i]] %>%
+    ggpredict(terms = c("age[20,25,30,35,40,45,50,55,60,65]", "nativity",  "urban")) %>%
+    plot(limits = c(0, 0.4)) %>%
+    print()
+}
+```
+
+
+

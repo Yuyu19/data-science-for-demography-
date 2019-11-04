@@ -1,0 +1,216 @@
+---
+title: 'Week 2 Exercise 1: IPUMS Distributions'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### A. Set Up
+
+1. Load the `haven`, `tidyverse` and `ipumsr` packages
+
+```{r, message=FALSE}
+library(haven)
+library(tidyverse)
+library(ipumsr)
+
+```
+
+2. Read in the `ipumsi_pan1960.dta` file, save as object `d0`
+
+```{r}
+d0 <- read_dta("C:/Users/18800/Desktop/stat model/ipumsi_pan1960.dta")
+d0
+```
+
+#### Finding Married Couples in Household
+
+3. Print household 1000 (`serial == 1000`)
+
+```{r}
+filter(d0, serial == 1000)
+```
+
+Q: How many people live in this house?
+
+A: 10
+
+Q: How many married couples are there? Who is married to who? Hint: inspect the pernum (person number) and sploc (spouse location) columns
+    
+A: 2 couples 
+  1 married to 2
+  3 married to 4
+
+4. Create object `d1` that 
+d1<- d1%>%
+  filter(sploc!=0)%>%
+  select(serial, age, `sex`, `pernum`, `sploc`)
+    a. contains only those with a spouse in the household
+    b. contains only the `serial`, `age`, `sex`, `pernum`, `sploc` columns
+    c. `age` is numeric
+    d. contains a new variable that uniquely identifies a married couple in a household
+    e. arranged by household number, couple id and gender
+   
+```{r}
+d1 <- d0 %>%
+  filter(sploc != 0) %>%
+  select(serial,age,sex, pernum, sploc) %>%
+  mutate(age = as.numeric(age), 
+         couple_id = paste(pmin(pernum, sploc), pmax(pernum, sploc), sep = "-")) %>%
+  arrange(serial, couple_id, sex)
+d1
+```
+
+#### Martial Age Differences
+
+5. Modify `d1` so that it 
+
+    a. contains the age difference of every couple in every household
+    b. the husband person number
+    c. the wife person number
+
+```{r}
+d1 <- d1 %>%
+  group_by(serial, couple_id) %>%
+  summarise(age_diff = age[1] - age[2],
+            husband = pernum[1], 
+            wife = pernum[2])
+d1
+
+```
+
+6. Plot a density plot of the age differences, include a vertical line for the mean age difference in `d1`
+
+```{r}
+ggplot(data = d1, 
+       mapping = aes(x = age_diff)) +
+  geom_density() +
+  geom_vline(xintercept = mean(d1$age_diff))
+```
+
+#### Z-Scores
+
+7. Using the age differences in the Panama sample, what is the Z-score of 
+
+    a. a marrital age difference of +10 years (male is 10 years older than female)
+    b. a marrital age difference of -10 years (female is 10 years older than male)
+
+```{r}
+z_score <- function(x, mu, sigma){
+  (x - mu)/sigma
+}
+m_age_diff <- mean(d1$age_diff)
+s_age_diff <- sd(d1$age_diff)
+z_score(x = 10, mu = m_age_diff, sigma = s_age_diff)
+z_score(x = -10, mu = m_age_diff, sigma = s_age_diff)
+```
+
+8. For each of these cases, explain in your own words what the Z-scores mean.
+
+    a. a case of marrital age difference of +10 years is 0.5417958 unit away from zero, we can see from the density plot that it's very rare
+
+    b. a case of marrital age difference of -10 years is -1.961454 unit away from zero, we can see from the density plot that it's very rare
+
+9. Calculate the Z-score for all couples in d1
+
+```{r}
+d1 <- d1 %>%
+  mutate(age_diff_z = z_score(x = age_diff , mu = m_age_diff, sigma = s_age_diff))
+d1
+```
+
+10. Plot a density plot of the Z-score of the age differences. 
+
+```{r}
+ggplot(data = d1, 
+       mapping = aes(x = age_diff_z)) +
+  geom_density()
+```
+
+11. Q: How does the plot differ from the previous density plot
+
+    A: looks more normally distributed
+
+#### Normality
+
+12. Asses the closeness of the sample of age differences in d1 to Normal distribution using the `geom_qq()` and `geom_qq_line()` functions
+
+```{r}
+ggplot(data = d1, 
+       mapping = aes(sample = age_diff_z)) +
+  geom_qq() +
+  geom_qq_line()
+```
+
+13. Add information on the wife's education by 
+
+    a. filtering from `d0` the females with a spouse 
+    b. selecting from `d0` the serial, pernum and edattain columns
+    c. converting the `NIU` and `unknown` values of edattian to `NA`, 
+    d. converting `edattain` to a factor
+    e. renaming the `pernum` column to `wife`, ready for the join...
+    f. using `right_join()` function to attach the wife education data to `d1`
+    g. drop rows with `NA` for the wife `edattain`
+
+```{r}
+head(d0)
+d2 <- d0 %>%
+  filter(sex == 2, sploc != 0) %>%
+  select(serial, pernum, edattain) %>%
+  mutate(edattain = lbl_na_if(edattain, ~.val %in% c(0, 9)),
+         edattain = as_factor(edattain)) %>%
+  rename(wife = pernum) %>%
+  right_join(d1) %>%
+  drop_na()
+```
+
+14. Create a facet of qq plots by the wife's `edattain` status. 
+
+```{r}
+ggplot(data = d2, 
+       mapping = aes(sample = age_diff_z)) +
+  facet_wrap("edattain") +
+  geom_qq() +
+  geom_qq_line()
+```
+
+15. Q: What can we interpret from the plots?
+    
+    A: #####
+     
+       #####
+       
+       #####
+       
+       
+#### Shapiro Test
+
+16. Use the `shapiro.test()` function to test for normality from a sample of the age differnces. 
+
+```{r}
+s0 <- d1 %>%
+  pull(age_diff) %>%
+  sample(size = 5000)
+shapiro.test(x = s0)
+```
+
+17. Interpet the output?
+
+A: #####
+
+18. Use the `shapiro.test()` function to test for normality from a sample of the age differnces from those where the wives completed university education. 
+
+```{r}
+s1 <- d2 %>%
+  filter(edattain == "university completed") %>%
+  pull(age_diff)
+shapiro.test(x = s1)
+```
+
+19. Interpet the output?
+
+A: #####

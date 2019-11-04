@@ -1,0 +1,358 @@
+---
+title: "Week 4 Exercise 1: IPUMS Internatinal Regression 1"
+output: 
+  html_document
+---
+
+#### A. Set Up
+
+1. Load the `haven`, `tidyverse`, `ggeffects` and `ipumsr` packages
+
+```{r}
+library(tidyverse)
+library(haven)
+library(ggeffects)
+library(ipumsr)
+```
+
+2. Read in the `ipumsi_mys.dta` and 
+    a. drop the `marstd`, `edattaind`, `religiond`, `migrate5` and `migmy` columns
+    b. remove the labels that are not in the data from labelled columns (using `lbl_clean()` function in the ipumsr package)
+
+```{r}
+d0 <- read_dta("C:/Users/18800/Desktop/stat model/data/ipumsi_mys.dta") %>% 
+  select(-marstd, -edattaind, -religiond, -migrate5, -migmy) %>%
+  mutate_if(is.labelled, lbl_clean)
+d0
+```
+
+3. Display the labelled data in the data
+
+```{r}
+d0 %>%
+ print(is.labelled)
+```
+
+4. Create a vector `var_lab` of the column names for the variable labels
+
+```{r}
+var_lab <- d0 %>%
+  select_if(is.labelled) %>%
+  names()
+
+var_lab
+```
+
+5. Using `var_lab` print the labels of each vector. 
+
+```{r}
+for(i in 1:length(var_lab)){
+  message(var_lab[i])
+  print_labels(d0[[var_lab[i]]])
+}
+```
+
+6. Using the print out above, create a vector `mis_lab` that captures the labels for missing values. 
+
+```{r}
+mis_labs <- c("unknown", 
+              "niu (not in universe)",
+              # eldch
+              "unknown",
+              # age
+              "not reported/missing", 
+              # marst and nativity
+              "unknown/missing")
+```
+
+7. Create an object `d1` that 
+
+    a. Converts values to NA when the labels are indicating the values are missing. 
+    b. Converts `age`, `chborn`, `chsurv`, `eldch` variables to numeric values based on thier codes.
+    c. Converts the remaining labelled variables to factors. 
+
+```{r}
+d1<- d0 %>%
+ mutate_if(is.labelled, funs(lbl_na_if(., ~.lbl %in% mis_labs))) %>%
+  mutate_at(vars(age, chborn, chsurv, eldch), zap_labels) %>%
+  mutate_if(is.labelled, as_factor)
+```
+
+
+#### B. Data to predict the mean number of children in each region
+
+1. Create an object `d2` from `d1` that 
+
+    a. Uses data from 1970
+    b. Does not include the year column
+    c. Is grouped by the region variable (`geolev2`)
+    d. For each region has a summary measure for 
+        i. population
+        ii. percentage foreign born
+        iii. percentage living in an urban household
+    e. Has a new column `urban` to indicate if region has over 50% of population living in urban household
+
+```{r}
+d2 <- d1 %>%
+  filter(year == 1970) %>%
+  select(-year) %>%
+  group_by(geolev2) %>%
+  summarise(pop = mean(poploc), 
+            p_edu = mean(edattain %in% c("secondary completed", "university completed"), na.rm = TRUE),
+            p_fb = mean(nativity == "foreign-born", na.rm = TRUE),
+            p_urban = mean(urban == "urban", na.rm= TRUE)) %>%
+  mutate(urban = ifelse(test = p_urban > 0.5, "yes", "no"))
+d2
+```
+
+2. Create an object `d3` from `d1` that 
+
+    a. Uses data from 1970 and mothers that have non-missing values for the children ever born varialbe (`chborn`)
+    b. Is grouped by the region variable (`geolev2`)
+    c. For each region has a summary measure for 
+        i. the mean number of children ever born
+        ii. the mean number of children survived
+    d. Joins the other region summary variables from `d2`
+
+```{r}
+d3 <- d1 %>%
+  filter(year == 1970,
+         !is.na(chborn)) %>%
+  group_by(geolev2) %>%
+  summarise(chborn = mean(chborn),
+            chsurv = mean(chsurv, na.rm = TRUE)) %>%
+  left_join(d2) 
+```
+
+3. Find the correlation between each of the numeric variables in `d3` by 
+    a. dropping the `geolev2` and `urban` variables
+    b. applying the `cor()` function to the remaining data
+
+```{r}
+d3 %>%
+  select(-geolev2, -urban) %>%
+  cor() 
+```
+
+4. Visualize the correlation strengths using the `corrplot()` function in the corrplot function
+
+```{r}
+install.packages("corrplot")
+library(corrplot)
+d3 %>%
+  select(-geolev2, -urban) %>%
+  cor() %>%
+  corrplot()
+```
+
+5. Adapt the output from the corrplot function by dropping the diagonal terms and plotting on the upper half of the correlation matrix. 
+
+```{r}
+d3 %>%
+  select(-geolev2, -urban) %>%
+  cor() %>%
+  corrplot(type = "upper", diag = FALSE)
+```
+
+6. Use the `qplot()` function to look at the relationship between regional averages of `chborn` and `chsurv`
+
+```{r}
+qplot(x = chsurv, y = chborn, data = d3)
+```
+
+#### C. Predicting the mean number of children in each region
+
+1. Find the average number of children born per region using
+    
+    a. the mean function and data `d3`
+    b. fitting a regession model with only a constant term
+
+```{r}
+mean(d3$chborn)
+
+lm(formula = chborn ~ 1, data = d3)
+```
+
+2. Fit a regression model with `chborn` as the outcome variable and `urban` as the predictor variable using data `d3`. Store the results in an object `m0`
+
+```{r}
+m0 <- lm(formula = chborn ~ urban, data = d3)
+m0
+```
+
+3. Create an object `p0` that stores the predicted values, using `ggpredict()` from `m0`, and then plot the predicted values and the raw data
+
+```{r}
+p0 <- ggpredict(model = #####)
+plot(p0, rawdata = #####)
+```
+4. Fit a regression model with `chborn` as the outcome variable and `chsurv` as the predictor variable using data `d3`. Store the results in an object `m1`
+
+```{r}
+##### <- lm(formula = chborn ~ #####, data = d3)
+m1
+```
+
+5. Create two plots of the the predictions from `m1` and the raw data using
+    a. the default range for `chsurv` in `ggpredict()`
+    b. a range range for `chsurv` that includes zero
+  
+```{r}
+ggpredict(model = #####) %>%
+  plot(rawdata = #####)
+  
+#####(model = m1, terms = "chsurv [0,5]") %>%
+  #####(rawdata = TRUE)
+```
+
+6. Fit a regression model with `chborn` as the outcome variable and `chsurv` and `urban` as the predictor variables using data `d3`. Store the results in an object `m2`
+
+```{r}
+m2 <- lm(formula = ##### ~ urban + chsurv, data = #####)
+#####
+```
+
+7. Replace the $\beta_i$ in the formula below to write out the fitted model based on `m4`
+
+$$
+\texttt{chborn} = \beta_0 + \beta_1 \texttt{urban} + \beta_2\texttt{chsurv} + \epsilon \\
+
+#####
+$$
+8. Complete the predictive interpretations of each parameter
+
+The intercept indicates #####
+
+The urban parameter indicates #####
+
+The chsurv parameter indicates #####
+
+9. Create two plots of the the predictions from `m2` and the raw data using
+    a. `urban` on the x-axis and different colors for different values of `chsurv`
+    b. `chsurv` on the x-axis and different colors for different levels of `urban`
+    
+```{r}
+ggpredict(model = m2, terms = c("#####", "#####")) %>%
+  #####(rawdata = TRUE)
+#####(model = m2, terms = c("#####", "urban")) %>%
+  plot(rawdata = TRUE)
+
+```
+
+10. Fit a regression model with `chborn` as the outcome variable and `chsurv`, `urban` and their interaction as the predictor variables using data `d3`. Store the results in an object `m3`
+
+```{r}
+m3 <- lm(formula = ##### ~ urban * #####, data = d3)
+m3
+```
+
+11. Create a plot of the the predictions from `m3` and the raw data using `chsurv` on the x-axis and different colors for different levels of `urban`
+
+```{r}
+#####(model = m3, terms = c("chsurv", "urban")) %>%
+  plot(rawdata = TRUE)
+```
+
+12. Use the `autoplot()` function in ggfortify to check the residuals of `m3`
+
+```{r}
+library(ggfortify)
+#####(m3)
+```
+
+
+#### C. Repeated Modeling - Gelman and Hill's secret weapon 
+
+1. Create an object `d4` from `d1` that 
+
+    a. Uses data from 1970 and mothers that have non-missing values for the children ever born varialbe (`chborn`)
+    b. Is grouped by the region variable (`geolev2`) and religion (`edattain`)
+    c. For each region has a summary measure for 
+        i. the mean number of children ever born
+        ii. the mean number of children survived
+    d. Joins the other region summary variables from `d2`
+```{r}
+d4 <- ##### %>%
+  filter(!is.na(#####)) %>%
+  group_by(#####, religion) %>%
+  summarise(chborn = mean(chborn),
+            ##### = mean(chsurv, na.rm = TRUE)) %>%
+  #####(d2)
+```
+
+2. Use the `do()` function to run a regression model `chborn ~ urban + chsurv` for each religion. Store the results in an object `m4`
+
+```{r}
+m4 <- d4 %>%
+  group_by(#####) %>%
+  do(m = lm(formula = chborn ~ urban + chsurv, data = .))
+m4
+```
+
+
+
+3. Use the `autoplot()` function in ggfortify to check the residuals of each model in `m4`
+
+```{r}
+autoplot(m4$m[#####])
+autoplot(m4$m[#####])
+autoplot(m4$m[3])
+autoplot(m4$m[4])
+autoplot(m4$#####[5])
+autoplot(m4$#####[6])
+```
+
+5. Use the `tidy()` function in the broom package to convert the models in each data set to a data frame. Store the results in an object `tm4`. Make sure the term column is a factor with the levels in the order that they appear in the model.
+
+```{r}
+library(broom)
+tm4 <- m4 %>%
+  #####(object = m) %>%
+  mutate(term = #####(term))
+tm4
+```
+
+
+6. Plot the coefficients in `tm4` to show 
+    a. religion on x-axis
+    b. parameter estimates on y axis.
+    c. the 50% confidence interval range for each parameter estimate
+    d. separate facets for each term
+    d. a horizontal ins at zero
+
+```{r}
+ggplot(data = tm4,
+       mapping = aes(x = #####, y = estimate,
+                     ymin = estimate + ##### * std.error,
+                     ymax = estimate + qnorm(0.75) * std.error)) +
+  facet_wrap("term", scales = "free") +
+  geom_point() +
+  geom_#####() +
+  geom_#####(yintercept = 0) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+7. Change the code to produce plots with 
+    a. a 95% confidence interval
+    b. a black and white theme
+
+```{r}
+ggplot(data = tm4,
+       mapping = aes(x = religion, y = estimate,
+                     ymin = estimate + ##### * std.error,
+                     ymax = estimate + qnorm(0.975) * std.error)) +
+  facet_wrap("#####", scales = "free") +
+  geom_#####() +
+  geom_pointrange() +
+  geom_hline(yintercept = #####) +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+8. Using the plot above, describe three conclusions about the different models
+
+- #####
+
+- #####
+
+- #####

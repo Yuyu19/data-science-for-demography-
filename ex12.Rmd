@@ -1,0 +1,200 @@
+---
+title: "Week 1, Exercise 2: IPUMS EDA"
+output:
+  word_document: default
+  pdf_document:
+    includes:
+      in_header: header_noR.txt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Set Up
+
+Download the `.dta` files for data extracts fro Armenia 2011, Costa Rica 2011 and Uruguay 2011
+
+Read them into R using the haven package
+
+```{r, message=FALSE,echo=TRUE, eval=FALSE}
+library(tidyverse)
+library(haven)
+
+d1 <- read_dta("#####")
+d2 <- #####
+d3 <- #####
+```
+
+For each sample select only the sample, perwt, age, sex and chborn columns
+
+```{r, echo=TRUE, eval=FALSE}
+d1 <- select(d1, #####, #####, #####, #####, #####)
+##### <- #####(d2, #####, #####, #####, #####, #####)
+##### <- #####(d3, #####, #####, #####, #####, #####)
+```
+
+Use the `as_factor()` function to convert the sample column from labels to factors
+
+```{r, echo=TRUE, eval=FALSE}
+d1$##### <- #####(d1$sample)
+#####$sample <- #####(#####$#####)
+#####$##### <- #####(#####$#####)
+```
+
+Combine each data set into on single data frame
+
+```{r, warning=FALSE, echo=TRUE, eval=FALSE}
+d0 <- bind_rows(d1, #####, #####)
+```
+
+Use the `droplevels()` function to drop unused labels
+
+```{r, echo=TRUE, eval=FALSE}
+d0 <- #####(d0)
+```
+
+
+## Dimensions
+
+How many observations are there in each sample?
+What percent of indviduals are from each sample?
+
+```{r, echo=TRUE, eval=FALSE}
+d0 %>% 
+  group_by(#####) %>%
+  #####(n = #####(), 
+            percent = #####()/nrow(d0) * 100)
+```
+
+
+## Summary Statistics 
+
+For each of the countries in your dataset, we want to find 
+    1) Mean 
+    2) Median 
+of the total number of children ever born [`CHBORN`]
+
+Before making the calulations consider:
+
+Q: What are the values of the `CHBORN` variable? What are the maximum number of children born to a woman
+A: , 
+```{r, echo=TRUE, eval=FALSE}
+table(d0$#####)
+```
+
+
+Q: There are missing values in `CHBORN`. Before calculating the mean and median, you need to address the missing values. What is the difference between the two missing-value categories 98: Unknown and 99: NIU (not in universe)?
+A: 
+
+
+
+Q: Should you include or exclude cases with the missing values from your calculations?
+A: 
+
+
+
+
+Q: What is the population universe for this variable in each country? That is, in each census, who was asked this question?
+A: 
+
+
+Q: To make an accurate comparison of children ever born across these three countries, which cases should you drop from your dataset?
+A: 
+
+Q: Given the above, use `dplyr` functions to calculate the mean, median and sample size for each country:
+A: 
+```{r, echo=TRUE, eval=FALSE}
+d0 %>% 
+  #####(age >= 15, 
+         sex == #####,
+         chborn != #####,
+         ##### != 99) %>%
+  #####(sample) %>%
+  summarise(mean = #####(chborn), 
+            median = median(#####), 
+            n = n())
+
+```
+
+Q: Calculate the lower quartile, upper quartile, interquartile range [IQR] and standard deviation of the total number of children ever born.
+
+A: 
+```{r, echo=TRUE, eval=FALSE}
+d0 %>% 
+  filter(##### >= 15, 
+         ##### == 2,
+         ##### != 98,
+         chborn != 99) %>%
+  group_by(#####) %>%
+  summarise(q1 = quantile(chborn, probs = 0.25), 
+            q3 = #####(chborn, probs = 0.75),
+            iqr = #####(chborn),
+            sd = #####(#####))
+```
+
+Q: Create a bar chart that displays the mean number of children born to women age 15 and older by country
+A: 
+```{r, echo=TRUE, eval=FALSE}
+d4 <- ##### %>% 
+  filter(##### >= 15, 
+         sex == #####,
+         chborn != #####,
+         chborn != 99) %>%
+  #####(sample) %>%
+  #####(mean = mean(chborn))
+
+ggplot(data = d4, 
+       mapping = aes(x = #####, ##### = mean)) +
+  geom_bar(stat = "identity")
+```
+
+The mean for `CHBORN` is calculated for women 15 & above. Recalculate the mean limiting your data to: (1) Women age 21 and older (2) Women age 30 and older and (3) Women above 45 and older:
+
+```{r, echo=TRUE, eval=FALSE}
+get_chborn <- function(d, x = 15){
+  d %>% 
+    filter(age >= x, 
+           sex == 2,
+           chborn != #####,
+           chborn != 99) %>%
+    group_by(sample) %>%
+    summarise(mean = mean(chborn)) %>%
+    mutate(age = x)
+}
+
+get_chborn(d0, x = 15)
+get_chborn(#####, x = 21)
+get_chborn(d0, x = 30)
+get_chborn(d0, x = #####)
+```
+
+Create a boxplot (A) representing the number of children born (CHBORN) to women age 15 and older by country
+
+```{r, echo=TRUE, eval=FALSE}
+ggplot(data = d0 %>% 
+  #####(age >= 15, 
+         sex == #####,
+         chborn != #####,
+         chborn != 99),
+       mapping = aes(x = #####, y = chborn)) +
+  #####_boxplot()
+```
+
+Create a boxplot (B) representing the number of children born (CHBORN) to women age 15 and older by country
+
+```{r, echo=TRUE, eval=FALSE}
+ggplot(data = d0 %>% 
+  filter(age >= #####, 
+         ##### == 2,
+         chborn != 98,
+         chborn != 99),
+       mapping = aes(x = sample, y = chborn)) +
+  geom_#####()
+```
+Based on both box plots above, which of the following is true?
+
+A) In box plot B, there is no median for Armenia because there not enough outliers.
+B) In box plot B, the median in Armenia is the smallest since it has the least dots on top of its upper whisker.
+C) In box plot A, the range is equal in all three countries
+D) In box plot A, the IQR in Uruguay is the smallest, since its median is the smallest

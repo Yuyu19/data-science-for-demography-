@@ -1,0 +1,113 @@
+---
+title: "Week 3 assignment--US"
+author: "Yuyu"
+date: "2018>"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#### A. Set Up
+
+1. Load the `haven`, `tidyverse` and `ipumsr` packages
+```{r, message=FALSE}
+library(haven)
+library(tidyverse)
+library(ipumsr)
+```
+
+2. Read in data, filter to those in alaska state, save as object `d0`
+```{r}
+d0 <- read_dta("C:/Users/18800/Desktop/stat model/data/ipumsi_00009.dta")
+d0$geo1_us2015<- as_factor(d0$geo1_us2015)  
+d0$marst<- as_factor(d0$marst) 
+d0<-d0 %>%
+  filter(geo1_us2015== "alaska",
+         bedrooms!=99,
+         inctot!=9999999
+)
+hist(d0$bedrooms)
+hist(d0$pernum)
+str(d0$marst)
+str(d0$age2)
+
+d0
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+library(dplyr)
+d1 <- d0 %>%
+  group_by(serial)%>%
+  summarise(bedroom_n=as.numeric(bedrooms[1]),
+            person_n=as.numeric(max(pernum)),
+            income=sum(inctot)
+            ) %>%
+  filter(person_n<=5)%>%
+ arrange(serial)
+
+d1
+
+```
+
+
+```{r}
+model1 <- lm(formula =bedroom_n~income + factor(person_n) , data = d1)
+summary(model1)
+
+library(ggeffects)
+e2 <- ggpredict(model = model1, terms = c("income ", "person_n"))
+
+plot(e2,rawdata = TRUE)
+lm(formula = bedroom_n~income + factor(person_n), data = d1) %>%
+  ggpredict() %>%
+  plot(rawdata = TRUE)
+
+
+```
+
+```{r}
+model2 <- lm(formula =bedroom_n~income * factor(person_n) , data = d1)
+summary(model2)
+
+library(ggeffects)
+e2 <- ggpredict(model = model2, terms = c("income ", "person_n"))
+
+plot(e2,rawdata = TRUE)
+lm(formula = bedroom_n~income * factor(person_n), data = d1) %>%
+  ggpredict() %>%
+  plot(rawdata = TRUE)
+```
+
+```{r}
+
+###model 3
+
+d1 <- d0 %>%
+  group_by(serial)%>%
+  summarise(bedroom_n=as.numeric(bedrooms[1]),
+            person_n=as.numeric(max(pernum)),
+            income=sum(inctot)
+            ) %>%
+  filter(bedroom_n>0,
+          income>0)%>%
+ arrange(serial)
+
+d1$person_n<-as.numeric(d1$person_n)
+model3 <- lm(formula =log(income)~ person_n + factor(bedroom_n) , data = d1)
+summary(model3)
+
+e2 <- ggpredict(model = model3, terms = c("person_n ", "bedroom_n"))
+plot(e2)
+plot(e2,rawdata = TRUE,log.y =TRUE)
+lm(formula  =log(income)~person_n + factor(bedroom_n), data = d1) %>%
+  ggpredict() %>%
+  plot(rawdata = TRUE)
+
+```
+
