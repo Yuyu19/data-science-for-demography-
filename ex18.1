@@ -1,0 +1,93 @@
+m1 <- matrix(1:28, nrow = 4, ncol = 7)
+m1[2, ]
+m1[1,7]
+
+# 3. Print out the first column of the m1 matrix
+m1[ ,1]
+
+swiss
+
+# 4. Print out the whole of the Infant.Mortality column in the swiss data
+swiss$Infant.Mortality 
+
+# 5. What is the maximum fertility in the swiss data
+max(swiss$Infant.Mortality )
+
+# 6. Print out the Catholic value for Glane in the swiss data
+swiss<- swiss
+swiss$Glane["Infant.Mortality"]
+swiss["Glane","Infant.Mortality"]
+swiss$Infant.Mortality["Glane"]
+
+# 7. Set the thrid and sixth element of a8 to missing values
+#Create a vector a8 of length 8 of random numbers from a normal 
+# distribution with mean 10 and standard deviation 2
+a8<-rnorm(n = 8, mean = 10, sd = 2)
+a8[3]<-NA
+a8[6]<-NA
+a8[c(3,6)]
+
+# 8. What is the variance of the remaining numbers in a8
+a8<-na.omit(a8)
+var(a8,na.rm=TRUE)
+
+getwd()
+
+# 1. Create a function called my_name with inputs
+# a) name # b) n 
+# that prints your name n times
+##### 
+my_name<- function(firstname, n){
+  rep(x = firstname, times = n)
+}
+my_name(firstname="Yuyu", n=10)
+
+# 2. Run your function with your name and n = 10
+
+# 3. Create a function called rpois_add with inputs
+# a) n # b) lambda1 # c) lambda2 
+# that adds together n random numbers from poisson distrubions with mean lambda1 a
+rpois_add <- function(n, lambda1, lambda2){ 
+  r1 <- rpois(n = n, lambda = lambda1)
+  r2 <- rpois(n = n, lambda = lambda2) 
+  return(r1 + r2)
+} 
+
+# 4. Run your function with n = 20, lambda1 = 5, lambda2 = 8#
+rpois_add( n = 20, lambda1 = 5, lambda2 = 8)
+
+#5. Create a function called called gage with inputs
+#    a) x with default of 15:55 
+#    b) c with default of 12 * w^-4
+#    that calcuates the Gage fertility age schedule using the formula
+#    c * (x - s) * (s + w - x)^2
+#    where c is a constant value
+#          x are mother ages
+#          s is the minimum mothers age
+#          w is the width of the mothers age (Hint: max(x) - min(x))
+
+gage <- function(x = 15:55, c = 12 * w^-4){
+s <- min(x)
+w <- max(x) - min(x)
+y <- c * (x - s) * (s + w - x)^2
+return(y)
+}
+
+# 6. Run your function and save results as
+#    a) y1 with all values set to default
+#    b) y2 with x set to 15:60 and c to 1/400000
+y1<-gage()
+y2<-gage(x = 15:60, c =  1/400000)
+y1
+# 7. Uncomment the code below for a simple plot of the results
+# plot(y1)
+# lines(y2)
+plot(y1)
+lines(y2)
+
+
+yuyu<- function(x=2,y=3){
+  c<-x^3+y*3
+  return(c)
+}
+source(file= "C:/Users/18800/Desktop/data science for demography/handout/exercise/ex18.R")

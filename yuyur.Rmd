@@ -1,0 +1,48 @@
+---
+title: '**Rworld**'
+author: '*Yuyu*'
+date: "2018骞<b4>11鏈<88>6鏃<a5>"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+##Contents
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure,fig.width=5,fig.height=5)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+##Data Frame
+```{r, echo=TRUE,message=FALSE}
+library(tidyverse)
+tbl_df(cars)
+)
+```
+
+
+# 10. Create a new section called "Contents" at the start of the document
+# 11. Create an unordered list of the contents of your document
+# 12. Transform the list you just created to ordered.
+# 13. Add a link named "Link" that leads to the UN population website http://www.un.org/esa/population/.
+# 14. Knit your document and check the HTML document looks like the HTML document in the soloutions folder.
+# 15. Knit to a Word Document or PDF (if you have MikTex installed)
